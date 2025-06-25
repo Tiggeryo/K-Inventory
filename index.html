@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>K Inventory Scanner – Realtime Sync</title>
   <style>
@@ -67,27 +67,26 @@ const ref = db.ref("sharedData/k-inventory");
 let   scannedItems = JSON.parse(localStorage.getItem("scannedItems") || "{}");
 const ONE_MONTH_MS = 30*24*60*60*1000;
 
-/* ─────────  SYNC HELPERS  ───────── */
+/* ─── Realtime sync ─── */
 function pushToFirebase(){
-  ref.set(scannedItems);                         // write entire object
+  ref.set(scannedItems);
   localStorage.setItem("scannedItems",JSON.stringify(scannedItems));
 }
 ref.on("value", snap=>{
-  const remote = snap.val() || {};
-  // Merge strategy: remote state replaces local (simplest)
-  scannedItems = remote;
+  scannedItems = snap.val() || {};
   localStorage.setItem("scannedItems",JSON.stringify(scannedItems));
   renderSummary(); renderLowStock();
 });
 
-/* ─────────  UI HELPERS  ───────── */
+/* ─── UI helpers ─── */
 function stockDot(q){ return q>=6?"🟢":q>=2?"🟡":"🔴"; }
 
-/* Summary render */
+/* Summary */
 function renderSummary(){
   const search=document.getElementById("summary-search-input").value.toLowerCase();
   const out=document.getElementById("summary-list"); out.innerHTML="";
   const byCat={};
+
   for(const [bc,it] of Object.entries(scannedItems)){
     const cat=(it.category||"uncategorized").toLowerCase();
     if(!byCat[cat]) byCat[cat]=[];
@@ -113,7 +112,8 @@ function renderSummary(){
     out.append(h,ul);
   });
 }
-/* Low stock render */
+
+/* Low stock */
 function renderLowStock(){
   const list=document.getElementById("low-list"); list.innerHTML="";
   const now=Date.now();
@@ -128,7 +128,7 @@ function renderLowStock(){
   });
 }
 
-/* ─────────  MODIFY INVENTORY ───────── */
+/* Modifiers */
 function removeItemQty(bc){
   const q=parseInt(document.getElementById("remove-"+bc).value)||1;
   const it=scannedItems[bc]; if(!it) return;
@@ -147,7 +147,7 @@ function addItem(barcode,meta,qty){
   pushToFirebase();
 }
 
-/* ─────────  PRODUCT SEARCH  ───────── */
+/* Search + manual add */
 async function searchProduct(){
   const q=document.getElementById("search-input").value.trim();
   const out=document.getElementById("search-results"); out.innerHTML="";
@@ -182,19 +182,19 @@ function addManualItem(barcode){
   addItem(barcode,meta,qty);
 }
 
-/* ─────────  DROPDOWN ───────── */
+/* Dropdown toggle */
 function toggleDetails(btn){
   const box=btn.nextElementSibling;
   box.style.display=box.style.display==="block"?"none":"block";
 }
 
-/* ─────────  QUAGGA MOBILE SCANNER  ───────── */
+/* Quagga scanner */
 let quaggaRunning=false;
 function startScanner(){
   if(quaggaRunning) return;
   Quagga.init({
     inputStream:{
-      name:"Live", type:"LiveStream",
+      name:"Live",type:"LiveStream",
       target:document.getElementById("scanner-preview"),
       constraints:{facingMode:{exact:"environment"},width:{ideal:1280},height:{ideal:720}}
     },
@@ -202,14 +202,15 @@ function startScanner(){
     locate:true
   },err=>{
     if(err){alert("Camera error: "+err);return;}
-    Quagga.start();quaggaRunning=true;
+    Quagga.start(); quaggaRunning=true;
   });
+
   const onDetected=data=>{
     const code=data.codeResult.code;
     if(!code) return;
     Quagga.offDetected(onDetected);
     const qty=parseInt(prompt(`Scanned: ${code}\nHow many?`,"1"))||1;
-    if(!qty){Quagga.onDetected(onDetected);return;}
+    if(!qty){ Quagga.onDetected(onDetected); return; }
     addItem(code,{barcode:code,name:"Unknown product",brand:"—",category:"uncategorized"},qty);
     Quagga.onDetected(onDetected);
   };
@@ -224,10 +225,8 @@ function stopScanner(){
 }
 document.addEventListener("visibilitychange",()=>{document.hidden?stopScanner():startScanner();});
 
-/* ─────────  ON LOAD ───────── */
-window.addEventListener("DOMContentLoaded",()=>{
-  renderSummary(); renderLowStock();          // initial paint (local cache)
-});
+/* Initial paint */
+window.addEventListener("DOMContentLoaded",()=>{ renderSummary(); renderLowStock(); });
 </script>
 </body>
 </html>
