@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>K Inventory Scanner</title>
+  <title>K Inventory Scanner – Realtime Sync</title>
   <style>
     body  { font-family: Arial, sans-serif; padding:20px; }
     video { width:100%; max-width:480px; border:2px solid #ccc; }
@@ -25,7 +25,6 @@
 <div id="controls">
   <button onclick="startScanner()">Start Scanner</button>
   <button onclick="stopScanner()">Stop Scanner</button>
-  <button onclick="syncToFirebase()">🔄 Sync Now</button>
 </div>
 
 <h3>🔍 Search for a Product</h3>
@@ -43,15 +42,14 @@
   <div id="low-list"></div>
 </div>
 
-<!-- Firebase libs -->
+<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
-<!-- Quagga2 for mobile/desktop barcode scanning -->
+<!-- Quagga2 -->
 <script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.js"></script>
 
 <script>
-/* ─────  Firebase config is PUBLIC, safe to embed ───── */
+/* ─── Firebase PUBLIC config ─── */
 const firebaseConfig = {
   apiKey:            "AIzaSyDF3R3xNI_DVesE8ezuq7OV4YdEYrxFe_0",
   authDomain:        "homeinventory-12e9d.firebaseapp.com",
@@ -61,26 +59,31 @@ const firebaseConfig = {
   messagingSenderId: "392110828195",
   appId:             "1:392110828195:web:0a9ac546bbb83e8332ed16"
 };
-
-/* ─────  App globals ───── */
 firebase.initializeApp(firebaseConfig);
+
 const db  = firebase.database();
 const ref = db.ref("sharedData/k-inventory");
-let scannedItems = JSON.parse(localStorage.getItem("scannedItems") || "{}");
+
+let   scannedItems = JSON.parse(localStorage.getItem("scannedItems") || "{}");
 const ONE_MONTH_MS = 30*24*60*60*1000;
 
-/* ─────  Persistence helpers ───── */
-function saveToLocal(){ localStorage.setItem("scannedItems",JSON.stringify(scannedItems)); }
-function syncToFirebase(){
-  ref.set(scannedItems);
-  localStorage.setItem("lastFirebaseSync",Date.now().toString());
-  alert("✅ Synced to Firebase");
+/* ─────────  SYNC HELPERS  ───────── */
+function pushToFirebase(){
+  ref.set(scannedItems);                         // write entire object
+  localStorage.setItem("scannedItems",JSON.stringify(scannedItems));
 }
+ref.on("value", snap=>{
+  const remote = snap.val() || {};
+  // Merge strategy: remote state replaces local (simplest)
+  scannedItems = remote;
+  localStorage.setItem("scannedItems",JSON.stringify(scannedItems));
+  renderSummary(); renderLowStock();
+});
 
-/* ─────  Visual helpers ───── */
+/* ─────────  UI HELPERS  ───────── */
 function stockDot(q){ return q>=6?"🟢":q>=2?"🟡":"🔴"; }
 
-/* ─────  Summary render ───── */
+/* Summary render */
 function renderSummary(){
   const search=document.getElementById("summary-search-input").value.toLowerCase();
   const out=document.getElementById("summary-list"); out.innerHTML="";
@@ -88,11 +91,11 @@ function renderSummary(){
   for(const [bc,it] of Object.entries(scannedItems)){
     const cat=(it.category||"uncategorized").toLowerCase();
     if(!byCat[cat]) byCat[cat]=[];
-    const label=`${it.name} (${it.brand})`.toLowerCase();
-    if(label.includes(search)||cat.includes(search)) byCat[cat].push({...it,barcode:bc});
+    const lbl=`${it.name} (${it.brand})`.toLowerCase();
+    if(lbl.includes(search)||cat.includes(search)) byCat[cat].push({...it,barcode:bc});
   }
   Object.keys(byCat).sort().forEach(cat=>{
-    const h=document.createElement("h4"); h.textContent=cat.charAt(0).toUpperCase()+cat.slice(1);
+    const h=document.createElement("h4"); h.textContent=cat[0].toUpperCase()+cat.slice(1);
     const ul=document.createElement("ul");
     byCat[cat].forEach(it=>{
       const li=document.createElement("li");
@@ -110,10 +113,9 @@ function renderSummary(){
     out.append(h,ul);
   });
 }
-
-/* ─────  Low-stock with 30-day grace ───── */
+/* Low stock render */
 function renderLowStock(){
-  const box=document.getElementById("low-list"); box.innerHTML="";
+  const list=document.getElementById("low-list"); list.innerHTML="";
   const now=Date.now();
   Object.keys(scannedItems).forEach(bc=>{
     const it=scannedItems[bc];
@@ -121,28 +123,31 @@ function renderLowStock(){
     if(it.quantity<=1){
       const d=document.createElement("div");
       d.textContent=`${it.name} (${it.brand}) — Qty: ${it.quantity}`;
-      box.appendChild(d);
+      list.appendChild(d);
     }
   });
 }
 
-/* ─────  Remove qty ───── */
+/* ─────────  MODIFY INVENTORY ───────── */
 function removeItemQty(bc){
   const q=parseInt(document.getElementById("remove-"+bc).value)||1;
   const it=scannedItems[bc]; if(!it) return;
   it.quantity-=q;
-  if(it.quantity<=1 && !it.lastLow) it.lastLow=Date.now();
+  if(it.quantity<=1&&!it.lastLow) it.lastLow=Date.now();
   if(it.quantity<0) it.quantity=0;
-  saveToLocal(); renderSummary(); renderLowStock();
+  pushToFirebase();
+}
+function addItem(barcode,meta,qty){
+  if(!scannedItems[barcode]){
+    scannedItems[barcode]={...meta,quantity:qty,lastLow:qty<=1?Date.now():null};
+  }else{
+    scannedItems[barcode].quantity+=qty;
+    if(scannedItems[barcode].quantity>1) scannedItems[barcode].lastLow=null;
+  }
+  pushToFirebase();
 }
 
-/* ─────  Toggle dropdown ───── */
-function toggleDetails(btn){
-  const box=btn.nextElementSibling;
-  box.style.display = box.style.display==="block" ? "none" : "block";
-}
-
-/* ─────  Product search (Open Food Facts) ───── */
+/* ─────────  PRODUCT SEARCH  ───────── */
 async function searchProduct(){
   const q=document.getElementById("search-input").value.trim();
   const out=document.getElementById("search-results"); out.innerHTML="";
@@ -159,7 +164,7 @@ async function searchProduct(){
         <div class="item-header">
           <span>${meta.name} (${meta.brand})</span>
           <input id="qty-${barcode}" type="number" min="1" value="1" style="width:60px;">
-          <button onclick="addManualItemWithQty('${barcode}')">Add</button>
+          <button onclick="addManualItem('${barcode}')">Add</button>
         </div>
         <button onclick="toggleDetails(this)">ℹ️ Show Details</button>
         <div class="dropdown-content">
@@ -171,19 +176,19 @@ async function searchProduct(){
     });
   }catch{ out.innerHTML="<p>Error searching.</p>"; }
 }
-function addManualItemWithQty(barcode){
+function addManualItem(barcode){
   const qty=parseInt(document.getElementById("qty-"+barcode).value)||1;
-  const card=document.querySelector(`#qty-${barcode}`).closest(".item");
-  const meta=JSON.parse(card.dataset.meta);
-  if(!scannedItems[barcode]) scannedItems[barcode]={...meta,quantity:qty,lastLow:qty<=1?Date.now():null};
-  else{
-    scannedItems[barcode].quantity+=qty;
-    if(scannedItems[barcode].quantity>1) scannedItems[barcode].lastLow=null;
-  }
-  saveToLocal(); renderSummary(); renderLowStock();
+  const meta=JSON.parse(document.querySelector(`#qty-${barcode}`).closest(".item").dataset.meta);
+  addItem(barcode,meta,qty);
 }
 
-/* ─────  Quagga2 Mobile Barcode Scanner ───── */
+/* ─────────  DROPDOWN ───────── */
+function toggleDetails(btn){
+  const box=btn.nextElementSibling;
+  box.style.display=box.style.display==="block"?"none":"block";
+}
+
+/* ─────────  QUAGGA MOBILE SCANNER  ───────── */
 let quaggaRunning=false;
 function startScanner(){
   if(quaggaRunning) return;
@@ -191,29 +196,21 @@ function startScanner(){
     inputStream:{
       name:"Live", type:"LiveStream",
       target:document.getElementById("scanner-preview"),
-      constraints:{ facingMode:{exact:"environment"}, width:{ideal:1280}, height:{ideal:720}}
+      constraints:{facingMode:{exact:"environment"},width:{ideal:1280},height:{ideal:720}}
     },
-    decoder:{ readers:["ean_reader","upc_reader","upc_e_reader"] },
+    decoder:{readers:["ean_reader","upc_reader","upc_e_reader"]},
     locate:true
   },err=>{
-    if(err){ alert("Camera error: "+err); return; }
-    Quagga.start(); quaggaRunning=true;
+    if(err){alert("Camera error: "+err);return;}
+    Quagga.start();quaggaRunning=true;
   });
-
   const onDetected=data=>{
     const code=data.codeResult.code;
     if(!code) return;
     Quagga.offDetected(onDetected);
     const qty=parseInt(prompt(`Scanned: ${code}\nHow many?`,"1"))||1;
-    if(!qty){ Quagga.onDetected(onDetected); return; }
-    if(!scannedItems[code]){
-      scannedItems[code]={barcode:code,name:"Unknown product",brand:"—",category:"uncategorized",
-                          quantity:qty,lastLow:qty<=1?Date.now():null};
-    }else{
-      scannedItems[code].quantity+=qty;
-      if(scannedItems[code].quantity>1) scannedItems[code].lastLow=null;
-    }
-    saveToLocal(); renderSummary(); renderLowStock();
+    if(!qty){Quagga.onDetected(onDetected);return;}
+    addItem(code,{barcode:code,name:"Unknown product",brand:"—",category:"uncategorized"},qty);
     Quagga.onDetected(onDetected);
   };
   Quagga.onDetected(onDetected);
@@ -225,13 +222,11 @@ function stopScanner(){
   if(v.srcObject) v.srcObject.getTracks().forEach(t=>t.stop());
   v.srcObject=null;
 }
-document.addEventListener("visibilitychange",()=>{ document.hidden ? stopScanner() : startScanner(); });
+document.addEventListener("visibilitychange",()=>{document.hidden?stopScanner():startScanner();});
 
-/* ─────  First render & weekly sync ───── */
+/* ─────────  ON LOAD ───────── */
 window.addEventListener("DOMContentLoaded",()=>{
-  renderSummary(); renderLowStock();
-  const lastSync=parseInt(localStorage.getItem("lastFirebaseSync")||0);
-  if(Date.now()-lastSync > 7*24*3600*1000) syncToFirebase();
+  renderSummary(); renderLowStock();          // initial paint (local cache)
 });
 </script>
 </body>
