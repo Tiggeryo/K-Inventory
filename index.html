@@ -1,81 +1,75 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>K Inventory Scanner – Realtime Sync</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>K Inventory Scanner – Realtime Sync</title>
 
-  <style>
-    body  { font-family: Arial, sans-serif; padding:20px; }
+<style>
+/* camera preview frame */
+#scanner-box{
+  width:100%;
+  max-width:480px;
+  height:270px;           /* 16:9 placeholder */
+  border:2px solid #999;
+  margin-bottom:8px;
+}
+#scanner-preview{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
 
-    /* ▶ camera preview box */
-    #scanner-box{
-      width:100%;
-      max-width:480px;          /* fits most phones */
-      height:270px;             /* 16:9 placeholder */
-      border:2px solid #999;
-      margin-bottom:8px;
-      position:relative;
-    }
-    #scanner-preview{
-      width:100%;
-      height:100%;
-      object-fit:cover;         /* fill the box, crop if needed */
-    }
-
-    /* other styles */
-    video { border:2px solid #ccc; }          /* helpful for desktop cams */
-    .item-header{display:flex;justify-content:space-between;align-items:center;}
-    .item-header span{flex-grow:1;}
-    .item{border:1px solid #ddd;padding:10px;margin-top:10px;border-radius:5px;}
-    button{cursor:pointer;margin-left:5px;}
-    input[type="text"],input[type="number"]{padding:5px;}
-    #search-input,#summary-search-input{width:100%;margin-top:10px;}
-    .dropdown-content{margin-top:5px;font-size:.9em;background:#f9f9f9;
-      border:1px solid #ccc;padding:5px;display:none;}
-  </style>
+/* generic ui */
+body  { font-family:Arial, sans-serif; padding:20px; }
+.item-header{display:flex;justify-content:space-between;align-items:center;}
+.item-header span{flex-grow:1;}
+.item{border:1px solid #ddd;padding:10px;margin-top:10px;border-radius:5px;}
+button{cursor:pointer;margin-left:5px;}
+input[type="text"],input[type="number"]{padding:5px;}
+#search-input,#summary-search-input{width:100%;margin-top:10px;}
+.dropdown-content{margin-top:5px;font-size:.85em;background:#f9f9f9;
+  border:1px solid #ccc;padding:5px;display:none;}
+</style>
 </head>
 <body>
 
-<h2>📷 K Inventory Scanner</h2>
-
-<!-- camera preview inside a fixed box -->
+<h2>📷 K Inventory Scanner</h2>
 <div id="scanner-box">
   <video id="scanner-preview" autoplay muted playsinline></video>
 </div>
 
 <div id="controls">
-  <button onclick="startScanner()">Start Scanner</button>
-  <button onclick="stopScanner()">Stop Scanner</button>
+  <button onclick="startScanner()">Start Scanner</button>
+  <button onclick="stopScanner()">Stop Scanner</button>
 </div>
 
-<h3>🔍 Search for a Product</h3>
-<input id="search-input" type="text" placeholder="Enter product name" oninput="searchProduct()">
+<h3>🔍 Search for a Product</h3>
+<input id="search-input"  type="text" placeholder="Enter product name">
 <div id="search-results"></div>
 
 <div id="summary">
-  <h3>📋 Inventory Summary</h3>
-  <input id="summary-search-input" type="text" placeholder="Search inventory…" oninput="renderSummary()">
+  <h3>📋 Inventory Summary</h3>
+  <input id="summary-search-input" type="text" placeholder="Search inventory…">
   <div id="summary-list"></div>
 </div>
 
 <div id="low-stock">
-  <h3>⚠️ Getting Low</h3>
+  <h3>⚠️ Getting Low</h3>
   <div id="low-list"></div>
 </div>
 
-<!-- Firebase -->
+<!-- Firebase & Quagga2 libs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<!-- Quagga2 -->
 <script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.js"></script>
 
 <script>
-/* ─── Firebase PUBLIC config ─── */
+/* ---------- Firebase config (public) ---------- */
 const firebaseConfig = {
   apiKey:            "AIzaSyDF3R3xNI_DVesE8ezuq7OV4YdEYrxFe_0",
   authDomain:        "homeinventory-12e9d.firebaseapp.com",
-  databaseURL:       "https://homeinventory-12e9d-default-rtdb.firebaseio.com",
+  databaseURL:       "https://homeinventory-12e9d.firebaseio.com",
   projectId:         "homeinventory-12e9d",
   storageBucket:     "homeinventory-12e9d.appspot.com",
   messagingSenderId: "392110828195",
@@ -83,142 +77,167 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 
+/* ---------- globals ---------- */
 const db  = firebase.database();
 const ref = db.ref("sharedData/k-inventory");
+let   scannedItems = JSON.parse(localStorage.getItem("scannedItems") || "{}");
+const ONE_MONTH_MS = 30*24*60*60*1000;
+let   quaggaRunning = false;
 
-let scannedItems = JSON.parse(localStorage.getItem("scannedItems") || "{}");
-const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+/* ---------- helpers ---------- */
+function stockDot(q){ return q>=6?"🟢":q>=2?"🟡":"🔴"; }
 
-/* ─── Realtime sync ─── */
+/* ---------- realtime sync ---------- */
 function pushToFirebase(){
   ref.set(scannedItems);
   localStorage.setItem("scannedItems", JSON.stringify(scannedItems));
 }
-ref.on("value", snap => {
+ref.on("value", snap=>{
   scannedItems = snap.val() || {};
   localStorage.setItem("scannedItems", JSON.stringify(scannedItems));
   renderSummary(); renderLowStock();
 });
 
-/* UI helpers */
-function stockDot(q){ return q>=6?"🟢":q>=2?"🟡":"🔴"; }
-
-/* Summary render */
+/* ---------- renderers ---------- */
 function renderSummary(){
-  const search=document.getElementById("summary-search-input").value.toLowerCase();
-  const out=document.getElementById("summary-list"); out.innerHTML="";
-  const byCat={};
-
-  for(const [bc,it] of Object.entries(scannedItems)){
+  const search = document.getElementById("summary-search-input").value.toLowerCase();
+  const out = document.getElementById("summary-list"); out.innerHTML = "";
+  const byCat = {};
+  for(const [code,it] of Object.entries(scannedItems)){
     const cat=(it.category||"uncategorized").toLowerCase();
     if(!byCat[cat]) byCat[cat]=[];
-    const lbl=`${it.name} (${it.brand})`.toLowerCase();
-    if(lbl.includes(search)||cat.includes(search)) byCat[cat].push({...it,barcode:bc});
+    const label=`${it.name} (${it.brand})`.toLowerCase();
+    if(label.includes(search)||cat.includes(search)) byCat[cat].push({...it,barcode:code});
   }
   Object.keys(byCat).sort().forEach(cat=>{
-    const h=document.createElement("h4");
-    h.textContent=cat[0].toUpperCase()+cat.slice(1);
+    const h=document.createElement("h4"); h.textContent=cat[0].toUpperCase()+cat.slice(1);
     const ul=document.createElement("ul");
     byCat[cat].forEach(it=>{
       const li=document.createElement("li");
       li.innerHTML=`
-        ${stockDot(it.quantity)} ${it.name} (${it.brand}): ${it.quantity}
+        ${stockDot(it.quantity)} ${it.name} (${it.brand}): ${it.quantity}
         <input id="remove-${it.barcode}" type="number" value="1" min="1" style="width:40px;">
-        <button onclick="removeItemQty('${it.barcode}')">➖</button>
+        <button onclick="removeQty('${it.barcode}')">➖</button>
         <button onclick="toggleDetails(this)">ℹ️</button>
         <div class="dropdown-content">
-          <strong>Category:</strong> ${it.category||"N/A"}<br>
-          <strong>Barcode:</strong>  ${it.barcode}
+          <strong>Category:</strong> ${it.category||"N/A"}<br>
+          <strong>Barcode:</strong> ${it.barcode}
         </div>`;
       ul.appendChild(li);
     });
     out.append(h,ul);
   });
 }
-
-/* Low-stock render */
 function renderLowStock(){
   const list=document.getElementById("low-list"); list.innerHTML="";
   const now=Date.now();
-  Object.keys(scannedItems).forEach(bc=>{
-    const it=scannedItems[bc];
-    if(it.quantity===0 && it.lastLow && now-it.lastLow>ONE_MONTH_MS){ delete scannedItems[bc]; return; }
+  for(const code of Object.keys(scannedItems)){
+    const it=scannedItems[code];
+    if(it.quantity===0 && it.lastLow && now-it.lastLow>ONE_MONTH_MS){ delete scannedItems[code]; continue; }
     if(it.quantity<=1){
       const d=document.createElement("div");
-      d.textContent=`${it.name} (${it.brand}) — Qty: ${it.quantity}`;
+      d.textContent=`${it.name} (${it.brand}) — Qty: ${it.quantity}`;
       list.appendChild(d);
     }
-  });
+  }
 }
 
-/* Modify inventory */
-function removeItemQty(bc){
-  const q=parseInt(document.getElementById("remove-"+bc).value)||1;
-  const it=scannedItems[bc]; if(!it) return;
+/* ---------- inventory modifiers ---------- */
+function addItem(code,meta,qty){
+  if(!scannedItems[code]) scannedItems[code]={...meta,quantity:qty,lastLow:qty<=1?Date.now():null};
+  else{
+    scannedItems[code].quantity+=qty;
+    if(scannedItems[code].quantity>1) scannedItems[code].lastLow=null;
+  }
+  pushToFirebase();
+}
+function removeQty(code){
+  const q=parseInt(document.getElementById("remove-"+code).value)||1;
+  const it=scannedItems[code]; if(!it) return;
   it.quantity-=q;
   if(it.quantity<=1&&!it.lastLow) it.lastLow=Date.now();
   if(it.quantity<0) it.quantity=0;
   pushToFirebase();
 }
-function addItem(barcode,meta,qty){
-  if(!scannedItems[barcode]){
-    scannedItems[barcode]={...meta,quantity:qty,lastLow:qty<=1?Date.now():null};
-  }else{
-    scannedItems[barcode].quantity+=qty;
-    if(scannedItems[barcode].quantity>1) scannedItems[barcode].lastLow=null;
-  }
-  pushToFirebase();
+
+/* ---------- dropdown toggle ---------- */
+function toggleDetails(btn){
+  const box=btn.nextElementSibling;
+  box.style.display = box.style.display==="block" ? "none" : "block";
 }
 
-/* Search + manual add */
+/* ---------- Open Food Facts search ---------- */
 async function searchProduct(){
   const q=document.getElementById("search-input").value.trim();
   const out=document.getElementById("search-results"); out.innerHTML="";
   if(q.length<3) return;
   try{
-    const res=await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1`);
-    const js=await res.json();
+    const r=await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1`);
+    const js=await r.json();
     js.products.slice(0,5).forEach(p=>{
-      const barcode=p.code||Math.random().toString(36).slice(2);
-      const meta={barcode,name:p.product_name||"Unnamed",brand:p.brands||"Unknown",
+      const code=p.code||Math.random().toString(36).slice(2);
+      const meta={barcode:code,name:p.product_name||"Unnamed",brand:p.brands||"Unknown",
                   category:(p.categories||"Uncategorized").split(',')[0].trim().toLowerCase()};
       const card=document.createElement("div"); card.className="item"; card.dataset.meta=JSON.stringify(meta);
       card.innerHTML=`
         <div class="item-header">
           <span>${meta.name} (${meta.brand})</span>
-          <input id="qty-${barcode}" type="number" min="1" value="1" style="width:60px;">
-          <button onclick="addManualItem('${barcode}')">Add</button>
+          <input id="qty-${code}" type="number" min="1" value="1" style="width:60px;">
+          <button onclick="addManual('${code}')">Add</button>
         </div>
         <button onclick="toggleDetails(this)">ℹ️ Show Details</button>
         <div class="dropdown-content">
           <strong>Category:</strong> ${(p.categories||"Uncategorized").split(',')[0]}<br>
           <strong>Quantity:</strong> ${p.quantity||"N/A"}<br>
-          <strong>Ingredients:</strong> ${p.ingredients_text||"N/A"}<br>
+          <strong>Ingredients:</strong> ${p.ingredients_text||"N/A"}
         </div>`;
       out.appendChild(card);
     });
-  }catch{ out.innerHTML="<p>Error searching.</p>"; }
+  }catch(e){ out.textContent="Search error."; }
 }
-function addManualItem(barcode){
-  const qty=parseInt(document.getElementById("qty-"+barcode).value)||1;
-  const meta=JSON.parse(document.querySelector(`#qty-${barcode}`).closest(".item").dataset.meta);
-  addItem(barcode,meta,qty);
-}
-
-/* Dropdown toggle */
-function toggleDetails(btn){
-  const box=btn.nextElementSibling;
-  box.style.display=box.style.display==="block"?"none":"block";
+function addManual(code){
+  const qty=parseInt(document.getElementById("qty-"+code).value)||1;
+  const meta=JSON.parse(document.querySelector(`#qty-${code}`).closest(".item").dataset.meta);
+  addItem(code,meta,qty);
 }
 
-/* Quagga scanner */
-let quaggaRunning=false;
+/* ---------- Quagga scanner ---------- */
 function startScanner(){
   if(quaggaRunning) return;
   Quagga.init({
-    inputStream:{ name:"Live",type:"LiveStream",target:document.getElementById("scanner-preview"),
-      constraints:{facingMode:{exact:"environment"},width:{ideal:1280},height:{ideal:720}} },
+    inputStream:{type:"LiveStream",target:"#scanner-preview",
+      constraints:{facingMode:"environment"}},
     decoder:{readers:["ean_reader","upc_reader","upc_e_reader"]}, locate:true
   },err=>{
     if(err){alert("Camera error: "+err);return;}
-    Quagga.start(); qu
+    Quagga.start(); quaggaRunning=true;
+  });
+  const onDetected = data=>{
+    const code=data.codeResult.code;
+    if(!code) return;
+    Quagga.offDetected(onDetected);
+    const qty=parseInt(prompt(`Scanned: ${code}\nHow many?`,"1"))||1;
+    if(!qty){ Quagga.onDetected(onDetected); return; }
+    addItem(code,{barcode:code,name:"Unknown product",brand:"—",category:"uncategorized"},qty);
+    Quagga.onDetected(onDetected);
+  };
+  Quagga.onDetected(onDetected);
+}
+function stopScanner(){
+  if(!quaggaRunning) return;
+  Quagga.stop(); quaggaRunning=false;
+  const vid=document.getElementById("scanner-preview");
+  if(vid.srcObject) vid.srcObject.getTracks().forEach(t=>t.stop());
+  vid.srcObject=null;
+}
+document.addEventListener("visibilitychange",()=>{ document.hidden?stopScanner():startScanner(); });
+
+/* ---------- initial DOM wiring ---------- */
+window.addEventListener("DOMContentLoaded",()=>{
+  renderSummary(); renderLowStock();
+  document.getElementById("search-input").addEventListener("input", searchProduct);
+  document.getElementById("summary-search-input").addEventListener("input", renderSummary);
+});
+</script>
+</body>
+</html>
