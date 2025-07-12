@@ -173,7 +173,7 @@
   <audio id="beep" src="https://www.soundjay.com/buttons/beep-07.mp3"></audio>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyZz1xxvwUd_TghYrGn0_A7v9Ukk5lsOR81HlizoRQqRsqIWMMZfTnkVM97ERqeX3dPrw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbye4TMIibWTVJsYjg-hSOnA9t7KM5QhL4nbPPrthh7Z3LHR9hTkY6wgjFDOgoK8D1xiUg/exec';
 
 async function loadFromGoogleSheets() {
   try {
@@ -212,21 +212,14 @@ window.onload = loadFromGoogleSheets;
   statusEl.textContent = "Sending test sync...";
   statusEl.style.color = "gray";
 
-  fetch('https://script.google.com/macros/s/AKfycbyZz1xxvwUd_TghYrGn0_A7v9Ukk5lsOR81HlizoRQqRsqIWMMZfTnkVM97ERqeX3dPrw/exec', {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(dummyData)
-  }).then(() => {
-    statusEl.textContent = "✅ Test sync sent (check sheet)";
-    statusEl.style.color = "green";
-    setTimeout(() => statusEl.textContent = "", 3000);
-  }).catch((err) => {
-    statusEl.textContent = "❌ Sync failed: " + err;
-    statusEl.style.color = "red";
-    setTimeout(() => statusEl.textContent = "", 5000);
-  });
-}
+ fetch(https://script.google.com/macros/s/AKfycbye4TMIibWTVJsYjg-hSOnA9t7KM5QhL4nbPPrthh7Z3LHR9hTkY6wgjFDOgoK8D1xiUg/exec, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'text/plain;charset=utf-8' // prevents preflight/CORS errors
+  },
+  body: JSON.stringify(item)
+});
+
 
     let pantry = JSON.parse(localStorage.getItem('pantryItems')) || [];
 
