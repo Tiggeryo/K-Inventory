@@ -173,6 +173,37 @@
   <audio id="beep" src="https://www.soundjay.com/buttons/beep-07.mp3"></audio>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script>
+
+    function testSync() {
+  const statusEl = document.getElementById("syncStatus");
+  const dummyData = {
+    barcode: "TEST123456",
+    name: "Test Item",
+    brand: "PantryTest",
+    quantity: 1,
+    expiry: "",
+    category: "Test"
+  };
+
+  statusEl.textContent = "Sending test sync...";
+  statusEl.style.color = "gray";
+
+  fetch('YOUR_GOOGLE_SCRIPT_URL_HERE', {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dummyData)
+  }).then(() => {
+    statusEl.textContent = "✅ Test sync sent (check sheet)";
+    statusEl.style.color = "green";
+    setTimeout(() => statusEl.textContent = "", 3000);
+  }).catch((err) => {
+    statusEl.textContent = "❌ Sync failed: " + err;
+    statusEl.style.color = "red";
+    setTimeout(() => statusEl.textContent = "", 5000);
+  });
+}
+
     let pantry = JSON.parse(localStorage.getItem('pantryItems')) || [];
 
     function normalizeCategory(cat) {
