@@ -145,10 +145,14 @@
     <button class="toggle-btn" onclick="toggleDarkMode()">🌓 Theme</button>
   </header>
 
-  <div class="scanner">
-    <button onclick="startScanner()">Start Barcode Scanner</button>
-    <div id="reader"></div>
-  </div>
+ <div class="scanner">
+  <button onclick="startScanner()">Start Barcode Scanner</button>
+  <div id="reader"></div>
+  <br><br>
+  <button onclick="testSync()" style="margin-top: 1rem;">🧪 Test Google Sheets Sync</button>
+  <div id="syncStatus" style="margin-top: 0.5rem; font-weight: bold;"></div>
+</div>
+
 
   <form onsubmit="addItem(); return false;">
     <input id="barcode" type="text" placeholder="Barcode" required>
