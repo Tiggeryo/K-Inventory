@@ -173,6 +173,30 @@
   <audio id="beep" src="https://www.soundjay.com/buttons/beep-07.mp3"></audio>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script>
+const SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_ID/exec';
+
+async function loadFromGoogleSheets() {
+  try {
+    const res = await fetch(SCRIPT_URL);
+    const data = await res.json();
+
+    pantry = data.map(item => ({
+      barcode: item.barcode,
+      name: item.name,
+      brand: item.brand,
+      quantity: parseInt(item.quantity),
+      expiry: item.expiry,
+      category: item.category
+    }));
+
+    renderPantry();
+  } catch (err) {
+    console.error("Failed to load from Google Sheets:", err);
+    renderPantry(); // fallback to local
+  }
+}
+
+window.onload = loadFromGoogleSheets;
 
     function testSync() {
   const statusEl = document.getElementById("syncStatus");
