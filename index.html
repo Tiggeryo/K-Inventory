@@ -5,138 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Pantry Tracker</title>
   <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-      transition: background 0.3s, color 0.3s;
-    }
-
-    body.light {
-      background: #fafafa;
-      color: #222;
-    }
-
-    body.dark {
-      background: #1e1e1e;
-      color: #ddd;
-    }
-
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 1rem;
-      background: #6200ea;
-      color: white;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: 1.5rem;
-    }
-
-    .toggle-btn {
-      background: transparent;
-      border: none;
-      color: white;
-      font-size: 1rem;
-      cursor: pointer;
-    }
-
-    .scanner, form, .search-box {
-      margin: 1rem;
-      background: white;
-      border-radius: 8px;
-      padding: 1rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-
-    body.dark .scanner, body.dark form, body.dark .search-box {
-      background: #2a2a2a;
-    }
-
-    form input, form select, form button {
-      width: calc(100% - 1rem);
-      margin: 0.5rem 0;
-      padding: 0.75rem;
-      font-size: 1rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-
-    body.dark form input, body.dark form select {
-      border: 1px solid #555;
-      background: #333;
-      color: #ddd;
-    }
-
-    .search-box input[type="search"] {
-      padding: 0.5rem;
-      font-size: 1rem;
-      width: 100%;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-    }
-
-    .pantry-list {
-      margin: 1rem;
-    }
-
-    .category-header {
-      font-weight: bold;
-      font-size: 1.2rem;
-      margin: 1rem 0 0.5rem;
-      border-bottom: 1px solid #ccc;
-      padding-bottom: 0.2rem;
-    }
-
-    .item-card {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: white;
-      padding: 1rem;
-      margin-bottom: 0.5rem;
-      border-radius: 6px;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    }
-
-    body.dark .item-card {
-      background: #2a2a2a;
-    }
-
-    .item-info p {
-      margin: 0.25rem 0;
-    }
-
-    .item-actions button {
-      margin-left: 0.5rem;
-      padding: 0.5rem;
-      font-size: 1rem;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    .item-actions button.light {
-      background: #6200ea;
-      color: white;
-    }
-
-    .item-actions button.remove {
-      background: #b00020;
-      color: white;
-    }
-
-    #reader {
-      width: 100%;
-      max-width: 400px;
-      margin: auto;
-    }
-
-    audio {
-      display: none;
-    }
+    /* Add your CSS here (same as previous) */
   </style>
 </head>
 <body class="light">
@@ -148,6 +17,9 @@
   <div class="scanner">
     <button onclick="startScanner()">Start Barcode Scanner</button>
     <div id="reader"></div>
+    <br><br>
+    <button onclick="testSync()">🧪 Test Google Sheets Sync</button>
+    <div id="syncStatus" style="margin-top: 0.5rem; font-weight: bold;"></div>
   </div>
 
   <form onsubmit="addItem(); return false;">
@@ -169,27 +41,28 @@
   <audio id="beep" src="https://www.soundjay.com/buttons/beep-07.mp3"></audio>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script>
+    const SCRIPT_URL = 'https://script.google.com/macros/s/YOUR_ID/exec';  // Replace with your Apps Script URL
     let pantry = JSON.parse(localStorage.getItem('pantryItems')) || [];
 
-    function normalizeCategory(cat) {
-      return cat.trim().toLowerCase();
-    }
+    async function loadFromGoogleSheets() {
+      try {
+        const res = await fetch(SCRIPT_URL);
+        const data = await res.json();
+        pantry = data.map(item => ({
+          barcode: item.barcode,
+          name: item.name,
+          brand: item.brand,
+          quantity: parseInt(item.quantity),
+          expiry: item.expiry,
+          category: item.category
+        }));
 
-    function groupByCategory(items) {
-      const grouped = {};
-      for (const item of items) {
-        const key = normalizeCategory(item.category || "Uncategorized");
-        if (!grouped[key]) grouped[key] = { label: item.category, items: [] };
-        grouped[key].items.push(item);
+        localStorage.setItem('pantryItems', JSON.stringify(pantry)); // Save to localStorage for offline
+        renderPantry();
+      } catch (err) {
+        console.error("Failed to load from Google Sheets:", err);
+        renderPantry(); // Fallback to localStorage
       }
-      return grouped;
-    }
-
-    function daysUntil(dateStr) {
-      if (!dateStr) return Infinity;
-      const today = new Date();
-      const expiry = new Date(dateStr);
-      return Math.floor((expiry - today) / (1000 * 60 * 60 * 24));
     }
 
     function renderPantry() {
@@ -198,12 +71,10 @@
       list.innerHTML = '';
 
       const filtered = pantry.filter(item =>
-        item.name.toLowerCase().includes(search) ||
-        item.brand.toLowerCase().includes(search)
+        item.name.toLowerCase().includes(search) || item.brand.toLowerCase().includes(search)
       );
 
       const grouped = groupByCategory(filtered);
-
       Object.keys(grouped).sort().forEach(key => {
         const header = document.createElement('div');
         header.className = 'category-header';
@@ -211,12 +82,11 @@
         list.appendChild(header);
 
         grouped[key].items.sort((a, b) => a.name.localeCompare(b.name)).forEach((item, i) => {
-          const index = pantry.findIndex(p => p.barcode === item.barcode && normalizeCategory(p.category) === key);
           const card = document.createElement('div');
           card.className = 'item-card';
-
           const days = daysUntil(item.expiry);
           let expiryColor = '';
+
           if (days < 0) expiryColor = 'color: darkred;';
           else if (days <= 3) expiryColor = 'color: red;';
           else if (days <= 7) expiryColor = 'color: orange;';
@@ -234,15 +104,36 @@
               <p style="${qtyStyle}">Qty: ${item.quantity}${item.expiry ? ` <span style="${expiryColor}">| 🗓 ${item.expiry}</span>` : ''}</p>
             </div>
             <div class="item-actions">
-              <button class="light" onclick="changeQty(${index},1)">＋</button>
-              <button class="light" onclick="changeQty(${index},-1)">－</button>
-              <button class="remove" onclick="removeItem(${index})">🗑️</button>
+              <button class="light" onclick="changeQty(${i},1)">＋</button>
+              <button class="light" onclick="changeQty(${i},-1)">－</button>
+              <button class="remove" onclick="removeItem(${i})">🗑️</button>
             </div>`;
           list.appendChild(card);
         });
       });
 
-      localStorage.setItem('pantryItems', JSON.stringify(pantry));
+      localStorage.setItem('pantryItems', JSON.stringify(pantry)); // Save to localStorage
+    }
+
+    function groupByCategory(items) {
+      const grouped = {};
+      for (const item of items) {
+        const key = normalizeCategory(item.category || "Uncategorized");
+        if (!grouped[key]) grouped[key] = { label: item.category, items: [] };
+        grouped[key].items.push(item);
+      }
+      return grouped;
+    }
+
+    function normalizeCategory(cat) {
+      return cat.trim().toLowerCase();
+    }
+
+    function daysUntil(dateStr) {
+      if (!dateStr) return Infinity;
+      const today = new Date();
+      const expiry = new Date(dateStr);
+      return Math.floor((expiry - today) / (1000 * 60 * 60 * 24));
     }
 
     function addItem() {
@@ -283,33 +174,49 @@
     }
 
     function syncToGoogleSheets(item) {
-      fetch('https://script.google.com/macros/s/AKfycbxBWL5l2t7EnUqwkxOKW8_zzfZgkvRgz8EdsDfLz1R8-eAE2oxygiYmcapBD1b6-JsZBQ/exec', {
+      if (navigator.onLine) {
+        fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item)
+        }).catch(err => console.error("Sync failed:", err));
+      } else {
+        console.log("Offline, saving to localStorage");
+      }
+    }
+
+    function testSync() {
+      const statusEl = document.getElementById("syncStatus");
+      const dummyData = {
+        barcode: "TEST123456",
+        name: "Test Item",
+        brand: "PantryTest",
+        quantity: 1,
+        expiry: "",
+        category: "Test"
+      };
+
+      statusEl.textContent = "Sending test sync...";
+      statusEl.style.color = "gray";
+
+      fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(item)
+        body: JSON.stringify(dummyData)
+      }).then(() => {
+        statusEl.textContent = "✅ Test sync sent (check sheet)";
+        statusEl.style.color = "green";
+        setTimeout(() => statusEl.textContent = "", 3000);
+      }).catch((err) => {
+        statusEl.textContent = "❌ Sync failed: " + err;
+        statusEl.style.color = "red";
+        setTimeout(() => statusEl.textContent = "", 5000);
       });
     }
 
-    function startScanner() {
-      const beep = document.getElementById('beep');
-      const reader = new Html5Qrcode("reader");
-      reader.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 },
-        (txt) => {
-          beep.play();
-          document.getElementById('barcode').value = txt;
-          fetch(`https://world.openfoodfacts.org/api/v0/product/${txt}.json`)
-            .then(r => r.json())
-            .then(d => {
-              document.getElementById('name').value = d.product?.product_name || '';
-              document.getElementById('brand').value = d.product?.brands || '';
-            });
-          reader.stop();
-        }, () => {});
-    }
-
-    renderPantry();
+    window.onload = loadFromGoogleSheets;
   </script>
 </body>
 </html>
-
