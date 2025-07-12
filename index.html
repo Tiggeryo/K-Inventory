@@ -5,7 +5,138 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Pantry Tracker</title>
   <style>
-    /* Add your CSS here (same as previous) */
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    body.light {
+      background: #fafafa;
+      color: #222;
+    }
+
+    body.dark {
+      background: #1e1e1e;
+      color: #ddd;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      background: #6200ea;
+      color: white;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+
+    .toggle-btn {
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    .scanner, form, .search-box {
+      margin: 1rem;
+      background: white;
+      border-radius: 8px;
+      padding: 1rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    body.dark .scanner, body.dark form, body.dark .search-box {
+      background: #2a2a2a;
+    }
+
+    form input, form select, form button {
+      width: calc(100% - 1rem);
+      margin: 0.5rem 0;
+      padding: 0.75rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    body.dark form input, body.dark form select {
+      border: 1px solid #555;
+      background: #333;
+      color: #ddd;
+    }
+
+    .search-box input[type="search"] {
+      padding: 0.5rem;
+      font-size: 1rem;
+      width: 100%;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    .pantry-list {
+      margin: 1rem;
+    }
+
+    .category-header {
+      font-weight: bold;
+      font-size: 1.2rem;
+      margin: 1rem 0 0.5rem;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 0.2rem;
+    }
+
+    .item-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: white;
+      padding: 1rem;
+      margin-bottom: 0.5rem;
+      border-radius: 6px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    body.dark .item-card {
+      background: #2a2a2a;
+    }
+
+    .item-info p {
+      margin: 0.25rem 0;
+    }
+
+    .item-actions button {
+      margin-left: 0.5rem;
+      padding: 0.5rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .item-actions button.light {
+      background: #6200ea;
+      color: white;
+    }
+
+    .item-actions button.remove {
+      background: #b00020;
+      color: white;
+    }
+
+    #reader {
+      width: 100%;
+      max-width: 400px;
+      margin: auto;
+    }
+
+    audio {
+      display: none;
+    }
   </style>
 </head>
 <body class="light">
@@ -18,7 +149,7 @@
     <button onclick="startScanner()">Start Barcode Scanner</button>
     <div id="reader"></div>
     <br><br>
-    <button onclick="testSync()">🧪 Test Google Sheets Sync</button>
+    <button onclick="testSync()" style="margin-top: 1rem;">🧪 Test Google Sheets Sync</button>
     <div id="syncStatus" style="margin-top: 0.5rem; font-weight: bold;"></div>
   </div>
 
