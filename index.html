@@ -143,8 +143,8 @@
       const query = document.getElementById('searchInput').value.toLowerCase();
       list.innerHTML = '';
       pantry.filter(item =>
-        item.name.toLowerCase().includes(query) ||
-        item.brand.toLowerCase().includes(query)
+        (item.name || "").toLowerCase().includes(query)
+        (item.brand || "").toLowerCase().includes(query)
       ).forEach((item, i) => {
         const days = daysUntil(item.expiry);
         let expiryColor = days < 0 ? 'darkred' : days <= 3 ? 'red' : days <= 7 ? 'orange' : '';
