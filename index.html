@@ -12,14 +12,17 @@
       padding: 0;
       transition: background 0.3s, color 0.3s;
     }
+
     body.light {
       background-color: #f9f9f9;
       color: #333;
     }
+
     body.dark {
       background-color: #1f1f1f;
       color: #fff;
     }
+
     header {
       background-color: #6200ea;
       color: white;
@@ -28,55 +31,91 @@
       justify-content: space-between;
       align-items: center;
     }
-    .toggle-btn, button {
+
+    h1 {
+      font-size: 1.5rem;
+      margin: 0;
+    }
+
+    .toggle-btn {
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+
+    .scanner {
+      padding: 1rem;
+      background-color: white;
+      border-radius: 8px;
+      margin: 1rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .form-container,
+    .search-box {
+      padding: 1rem;
+    }
+
+    .form-container input,
+    .form-container button {
+      padding: 0.8rem;
+      margin: 0.5rem 0;
+      width: 100%;
+      font-size: 1rem;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    .form-container button {
       background-color: #6200ea;
       color: white;
       border: none;
-      padding: 0.6rem 1rem;
-      border-radius: 5px;
       cursor: pointer;
     }
-    button:hover {
+
+    .form-container button:hover {
       background-color: #3700b3;
     }
-    .form-container, .scanner, .search-box {
-      margin: 1rem;
-      background-color: white;
-      padding: 1rem;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    input {
-      margin: 0.5rem 0;
-      padding: 0.5rem;
-      width: 100%;
-      font-size: 1rem;
-    }
+
     .item-card {
-      background-color: white;
-      margin: 1rem;
+      background: white;
       padding: 1rem;
+      margin: 1rem;
       border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    .item-info p {
-      margin: 0.3rem 0;
-    }
+
     .item-actions button {
+      padding: 0.5rem 1rem;
       margin-left: 0.5rem;
+      background-color: #6200ea;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
     }
+
     .pantry-list {
       display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      padding: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
     }
-    body.dark .form-container, body.dark .scanner, body.dark .item-card, body.dark .search-box {
+
+    body.dark .scanner,
+    body.dark .form-container,
+    body.dark .item-card {
       background-color: #333;
+    }
+
+    body.dark input {
+      background-color: #444;
       color: white;
+      border: 1px solid #666;
     }
   </style>
 </head>
@@ -87,84 +126,89 @@
   </header>
 
   <div class="scanner">
-    <button onclick="startScanner()">Start Barcode Scanner</button>
-    <div id="reader"></div>
-    <br><br>
     <button onclick="testSync()">🧪 Test Google Sheets Sync</button>
     <div id="syncStatus" style="margin-top: 0.5rem; font-weight: bold;"></div>
   </div>
 
   <div class="form-container">
-    <input id="barcode" type="text" placeholder="Barcode" />
-    <input id="name" type="text" placeholder="Item Name" />
-    <input id="brand" type="text" placeholder="Brand" />
-    <input id="quantity" type="number" placeholder="Quantity" min="1" value="1" />
-    <input id="expiry" type="date" />
-    <input id="category" type="text" placeholder="Category (e.g. Snacks, Dairy)" />
+    <input id="barcode" type="text" placeholder="Barcode" required />
+    <input id="name" type="text" placeholder="Item Name" required />
+    <input id="brand" type="text" placeholder="Brand" required />
+    <input id="quantity" type="number" placeholder="Quantity" min="1" value="1" required />
+    <input id="expiry" type="date" placeholder="Expiry Date" />
+    <input id="category" type="text" placeholder="Category (e.g. Snacks)" required />
     <button onclick="addItem()">Add Item</button>
   </div>
 
   <div class="search-box">
-    <input type="search" id="searchInput" placeholder="Search..." oninput="renderPantry()" />
+    <input type="search" id="searchInput" placeholder="Search by name or brand..." oninput="renderPantry()">
   </div>
 
   <div class="pantry-list" id="pantryList"></div>
 
   <audio id="beep" src="https://www.soundjay.com/buttons/beep-07.mp3"></audio>
 
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script>
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5D3kpdxDv9byNhZDUDzaAuBrxCCEDIww6bQrT_87CLQ9jIS1KP5OSLwM4pPiTMjzC/exec';
     let pantry = JSON.parse(localStorage.getItem('pantryItems')) || [];
-    let scanner = null;
 
     async function loadFromGoogleSheets() {
       try {
         const res = await fetch(SCRIPT_URL);
         const data = await res.json();
-        pantry = data.map(row => ({
-          barcode: row.Barcode,
-          name: row.Name,
-          brand: row.Brand,
-          quantity: parseInt(row.Quantity),
-          expiry: row.Expiry,
-          category: row.Category
+        pantry = data.map(item => ({
+          barcode: item.barcode || item.Barcode,
+          name: item.name || item.Name,
+          brand: item.brand || item.Brand,
+          quantity: parseInt(item.quantity || item.Quantity),
+          expiry: item.expiry || item.Expiry,
+          category: item.category || item.Category
         }));
         localStorage.setItem('pantryItems', JSON.stringify(pantry));
         renderPantry();
       } catch (err) {
-        console.error('Sheet fetch error:', err);
-        renderPantry(); // fallback to localStorage
+        console.error("Sheet fetch error:", err);
+        renderPantry(); // fallback to local storage
       }
     }
 
     function renderPantry() {
       const list = document.getElementById('pantryList');
-      const query = document.getElementById('searchInput').value.toLowerCase();
+      const search = document.getElementById('searchInput').value.toLowerCase();
       list.innerHTML = '';
-      pantry.filter(item =>
-        (item.name || "").toLowerCase().includes(query)
-        (item.brand || "").toLowerCase().includes(query)
-      ).forEach((item, i) => {
-        const days = daysUntil(item.expiry);
-        let expiryColor = days < 0 ? 'darkred' : days <= 3 ? 'red' : days <= 7 ? 'orange' : '';
-        let qtyStyle = item.quantity === 0 ? 'gray;text-decoration:line-through;' :
-                       item.quantity === 1 ? 'orange' : '';
 
-        list.innerHTML += `
-          <div class="item-card">
-            <div class="item-info">
-              <p><strong>${item.name}</strong> (${item.brand})</p>
-              <p style="color:${qtyStyle}">Qty: ${item.quantity}
-                ${item.expiry ? `<span style="color:${expiryColor}"> | 🗓 ${item.expiry}</span>` : ''}</p>
-            </div>
-            <div class="item-actions">
-              <button onclick="changeQty(${i},1)">＋</button>
-              <button onclick="changeQty(${i},-1)">－</button>
-              <button onclick="removeItem(${i})">🗑️</button>
-            </div>
+      const filtered = pantry.filter(item =>
+        String(item.name || "").toLowerCase().includes(search) ||
+        String(item.brand || "").toLowerCase().includes(search)
+      );
+
+      filtered.forEach((item, i) => {
+        const card = document.createElement('div');
+        card.className = 'item-card';
+
+        const days = daysUntil(item.expiry);
+        let expiryColor = '';
+        if (days < 0) expiryColor = 'color: darkred;';
+        else if (days <= 3) expiryColor = 'color: red;';
+        else if (days <= 7) expiryColor = 'color: orange;';
+
+        let qtyStyle = '';
+        if (item.quantity === 0) qtyStyle = 'color: gray; text-decoration: line-through;';
+        else if (item.quantity === 1) qtyStyle = 'color: orange;';
+
+        card.innerHTML = `
+          <div class="item-info">
+            <p><strong>${item.name}</strong> (${item.brand})</p>
+            <p style="${qtyStyle}">Qty: ${item.quantity}${item.expiry ? ` <span style="${expiryColor}">| 🗓 ${item.expiry}</span>` : ''}</p>
+          </div>
+          <div class="item-actions">
+            <button onclick="changeQty(${i},1)">＋</button>
+            <button onclick="changeQty(${i},-1)">－</button>
+            <button class="remove" onclick="removeItem(${i})">🗑️</button>
           </div>`;
+        list.appendChild(card);
       });
+
       localStorage.setItem('pantryItems', JSON.stringify(pantry));
     }
 
@@ -184,8 +228,11 @@
       const c = document.getElementById('category').value.trim().toLowerCase();
 
       const match = pantry.find(i =>
-        i.barcode === b && i.name === n && i.brand === br &&
-        i.expiry === e && i.category.toLowerCase() === c
+        i.barcode === b &&
+        i.name === n &&
+        i.brand === br &&
+        i.expiry === e &&
+        i.category.toLowerCase() === c
       );
 
       if (match) {
@@ -194,18 +241,21 @@
         pantry.push({ barcode: b, name: n, brand: br, quantity: q, expiry: e, category: c });
       }
 
-      syncToGoogleSheets({ barcode: b, name: n, brand: br, quantity: q, expiry: e, category: c });
+      localStorage.setItem('pantryItems', JSON.stringify(pantry));
       renderPantry();
+      syncToGoogleSheets({ barcode: b, name: n, brand: br, quantity: q, expiry: e, category: c });
     }
 
     function changeQty(index, delta) {
       pantry[index].quantity += delta;
       if (pantry[index].quantity < 0) pantry[index].quantity = 0;
+      localStorage.setItem('pantryItems', JSON.stringify(pantry));
       renderPantry();
     }
 
     function removeItem(index) {
       pantry.splice(index, 1);
+      localStorage.setItem('pantryItems', JSON.stringify(pantry));
       renderPantry();
     }
 
@@ -220,57 +270,35 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(item)
-        }).catch(err => console.error('Sync failed:', err));
+        }).catch(err => console.error("Sync failed:", err));
       }
     }
 
     function testSync() {
-      const statusEl = document.getElementById('syncStatus');
-      const testItem = {
-        barcode: 'TEST123456',
-        name: 'Test Item',
-        brand: 'PantryTest',
+      const statusEl = document.getElementById("syncStatus");
+      const dummy = {
+        barcode: "TEST123",
+        name: "TestItem",
+        brand: "PantryTest",
         quantity: 1,
-        expiry: '',
-        category: 'Test'
+        expiry: "",
+        category: "Test"
       };
-      statusEl.textContent = 'Sending test sync...';
-      statusEl.style.color = 'gray';
-
+      statusEl.textContent = "Sending test sync...";
+      statusEl.style.color = "gray";
       fetch(SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(testItem)
+        body: JSON.stringify(dummy)
       }).then(() => {
-        statusEl.textContent = '✅ Test sync sent (check sheet)';
-        statusEl.style.color = 'green';
+        statusEl.textContent = "✅ Test sync sent (check sheet)";
+        statusEl.style.color = "green";
+        setTimeout(() => statusEl.textContent = "", 3000);
       }).catch(err => {
-        statusEl.textContent = '❌ Sync failed: ' + err;
-        statusEl.style.color = 'red';
+        statusEl.textContent = "❌ Sync failed: " + err;
+        statusEl.style.color = "red";
+        setTimeout(() => statusEl.textContent = "", 5000);
       });
-    }
-
-    function startScanner() {
-      if (!window.Html5Qrcode) return alert('Scanner failed to load.');
-      if (scanner) {
-        scanner.stop().then(() => {
-          document.getElementById('reader').innerHTML = '';
-          scanner = null;
-        });
-        return;
-      }
-      scanner = new Html5Qrcode('reader');
-      scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: 250 },
-        (decodedText) => {
-          document.getElementById('barcode').value = decodedText;
-          document.getElementById('beep').play();
-          scanner.stop().then(() => {
-            document.getElementById('reader').innerHTML = '';
-            scanner = null;
-          });
-        },
-        (err) => {}
-      ).catch(err => alert('Camera access error: ' + err));
     }
 
     window.onload = loadFromGoogleSheets;
